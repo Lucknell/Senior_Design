@@ -1,7 +1,10 @@
+#define bluetoothPin 2
 int state = 20;
    int count = 0;
    void setup() {
       Serial.begin(9600); // Default communication rate of the Bluetooth module
+      pinMode(bluetoothPin,OUTPUT);
+      digitalWrite(bluetoothPin,HIGH);
     }
     void loop() {
      if(Serial.available() > 0){ // Checks whether data is comming from the serial port
