@@ -10,6 +10,8 @@
 #define greenLimit 15 //define the limit for the green light in seconds 
 #define yellowLimit 25//define the limit for the yellow light in seconds 
 #define redLimit 50//define the limit for the red light in seconds 
+#define nearLimit 2
+#define farLimit 3.01
 
 double distance, duration;
 char command = 'e';
@@ -108,7 +110,7 @@ void loop() {
  //Serial.println(distance);
     Serial.println(digitalRead(bluetoothPin)); 
   // Controlling the LED
-  if (distance >= 3.01||!redFlag) {
+  if (distance >= farLimit||!redFlag) {
     if (digitalRead(bluetoothPin) == LOW)
       {}
     else
@@ -116,7 +118,7 @@ void loop() {
       digitalWrite(bluetoothPin, LOW);
     }
   }//delay(10000);}
-  if (distance < 2 && redFlag) {
+  if (distance < nearLimit && redFlag) {
     if (digitalRead(bluetoothPin) == HIGH)
      {}
     else
