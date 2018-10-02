@@ -1,3 +1,10 @@
+#include <Adafruit_SSD1306.h>
+#include <TimerOne.h>
+#include <Wire.h>
+#include <SPI.h>
+
+#define OLED_RESET 4
+Adafruit_SSD1306 display(OLED_RESET);
 #define bluetoothPin 2
 #define motorPin 0
 int state = 20;
@@ -6,8 +13,16 @@ void setup() {
   Serial.begin(9600); // Default communication rate of the Bluetooth module
   pinMode(bluetoothPin, OUTPUT);
   digitalWrite(bluetoothPin, HIGH);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 }
 void loop() {
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.println("This is a test.");
+  display.display();
+  
   if (Serial.available() > 0) { // Checks whether data is comming from the serial port
     state = Serial.read(); // Reads the data from the serial port
   }
