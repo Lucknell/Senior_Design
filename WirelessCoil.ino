@@ -2,6 +2,7 @@
 
 #define ledPin 10
 #define bluetoothPin 5
+#define statePin 4
 #define echoPin 7
 #define trigPin 6
 #define redLED 13
@@ -72,6 +73,7 @@ void setup() {
   Serial.begin(9600); // Default communication rate of the Bluetooth module
   Timer1.initialize(250000);         // initialize timer1, and set a 1/4 second period
   Timer1.attachInterrupt(isr); // attaches isrTimer() as a timer overflow interrupt
+  pinMode(statePin, INPUT);
   pinMode(echoPin, INPUT); // Sets the echoPin as an Input
   for (int i = 0; i < 6; i++)
   {
@@ -117,7 +119,7 @@ void loop() {
     {
       digitalWrite(bluetoothPin, LOW);
     }
-  }//delay(10000);}
+  }
   if (distance < nearLimit && redFlag) {
     if (digitalRead(bluetoothPin) == HIGH)
      {}
@@ -128,13 +130,14 @@ void loop() {
     }
   }
   }
-  if (command == 'h') {
+  if (command == 'F') {
     digitalWrite(ledPin, HIGH); // LED ON
     command = 0;
   }
-  else if (command == 'e') {
+  else if (command == 'Q') {
     digitalWrite(ledPin, LOW); // LED ON
     command = 0;
   }
-
+  Serial.print(digitalRead(statePin));
+  delay(1000);
 }
