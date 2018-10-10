@@ -1,3 +1,4 @@
+#include <Adafruit_INA219.h>
 #include <Adafruit_SSD1306.h>
 #include <TimerOne.h>
 #include <Wire.h>
@@ -5,6 +6,7 @@
 
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
+Adafruit_INA219 ina219;
 #define bluetoothPin 2
 #define statePin 4
 #define motorPin 0
@@ -12,6 +14,9 @@ Adafruit_SSD1306 display(OLED_RESET);
 
 char state = 'g';
 int count = 0, pCount = 0, connection = 99;
+unsigned long previousMillis = 0;
+unsigned long interval = 100;
+const int chipSelect = 10;
 float shuntvoltage = 0;
 float busvoltage = 0;
 float current_mA = 0;
@@ -21,6 +26,13 @@ String test = "";
 void isr()
 {
   count++;
+}
+void ina219values() {
+  shuntvoltage = ina219.getShuntVoltage_mV();
+  busvoltage = ina219.getBusVoltage_V();
+  current_mA = ina219.getCurrent_mA();
+  loadvoltage = busvoltage + (shuntvoltage / 1000);
+  energy = energy + loadvoltage * current_mA / 3600;
 }
 void decrypt(char info)
 {
@@ -32,7 +44,7 @@ void decrypt(char info)
   test += "V";
   test += "\nCurrent : ";
   test += current_mA;
-  test += "A";
+  test += "mA";
   test += "\nmW : " ;
   test += (loadvoltage * current_mA);
   test += "mWh";
@@ -53,6 +65,7 @@ void setup() {
   Timer1.initialize(250000);         // initialize timer1, and set a 1/4 second period
   Timer1.attachInterrupt(isr); // attaches isrTimer() as a timer overflow interrupt
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  ina219.begin();
 }
 void loop() {
 
@@ -71,7 +84,6 @@ void loop() {
       }
       //Serial.println(state);
       connection = digitalRead(statePin);
-      decrypt(state);
       if (count % 40 == 0 && count != 0) {
         Serial.write('Q');
         delay(100);
@@ -80,4 +92,11 @@ void loop() {
         Serial.write('F');
     }
   }
+    unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval)
+  {
+    previousMillis = currentMillis;
+    ina219values();
+   decrypt(state);
+   }
 }
