@@ -7,7 +7,7 @@
 #define trigPin 6
 #define redLED 13
 #define yellowLED 12
-#define greenLED 11 
+#define greenLED 11
 #define greenLimit 15 //define the limit for the green light in seconds 
 #define yellowLimit 25//define the limit for the yellow light in seconds 
 #define redLimit 50//define the limit for the red light in seconds 
@@ -68,6 +68,14 @@ void trafficSignal()
     tempcount = 0;
 
 }
+void activateCoil()
+{
+   digitalWrite(ledPin, HIGH);
+}
+void disactivateCoil()
+{
+ digitalWrite(ledPin, LOW);
+}
 
 void setup() {
   Serial.begin(9600); // Default communication rate of the Bluetooth module
@@ -75,7 +83,8 @@ void setup() {
   Timer1.attachInterrupt(isr); // attaches isrTimer() as a timer overflow interrupt
   pinMode(statePin, INPUT);
   pinMode(echoPin, INPUT); // Sets the echoPin as an Input
-  for (int i = 0; i < 6; i++)
+  digitalWrite(bluetoothPin,HIGH);
+for (int i = 0; i < 6; i++)
   {
     pinMode(outPins[i], OUTPUT);
   }
@@ -106,38 +115,17 @@ void loop() {
     // Calculating the distance
     distance = duration * 340 / 2000000;
     trafficSignal();
-  
- //Serial.println(command);
- //Serial.print("\n\nDistance:");
- //Serial.println(distance);
-    Serial.println(digitalRead(bluetoothPin)); 
-  // Controlling the LED
-  if (distance >= farLimit||!redFlag) {
-    if (digitalRead(bluetoothPin) == LOW)
-      {}
-    else
-    {
-      digitalWrite(bluetoothPin, LOW);
+    if (distance < nearLimit && redFlag) {
+      if (command == 'F') {
+        activateCoil();
+        command = 0;
+      }
     }
-  }
-  if (distance < nearLimit && redFlag) {
-    if (digitalRead(bluetoothPin) == HIGH)
-     {}
     else
-    {
-      digitalWrite(bluetoothPin, HIGH);
-
+      disactivateCoil();
+    if (command == 'Q') {
+      disactivateCoil();
+      command = 0;
     }
-  }
-  }
-  if (command == 'F') {
-    digitalWrite(ledPin, HIGH); // LED ON
-    command = 0;
-  }
-  else if (command == 'Q') {
-    digitalWrite(ledPin, LOW); // LED ON
-    command = 0;
-  }
-  Serial.print(digitalRead(statePin));
-  delay(1000);
+    }
 }
