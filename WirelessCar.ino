@@ -12,7 +12,7 @@ SoftwareSerial mySerial(10,11);
 Adafruit_SSD1306 display(OLED_RESET);
 Adafruit_INA219 ina219;
 #define bluetoothPin 2
-#define statePin 5 //Pin 4 was occupied by OLED_RESET
+#define statePin 6 //Pin 4 was occupied by OLED_RESET
 #define motorPin 0
 
 
