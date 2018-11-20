@@ -115,7 +115,9 @@ void loop() {
     // Calculating the distance
     distance = duration * 340 / 2000000;
     trafficSignal();
-    if (distance < nearLimit && redFlag) {
+    
+    }
+  if (distance < nearLimit && redFlag) {
       if (command == 'F') {
         activateCoil();
         command = 0;
@@ -126,6 +128,5 @@ void loop() {
     if (command == 'Q') {
       disactivateCoil();
       command = 0;
-    }
     }
 }
