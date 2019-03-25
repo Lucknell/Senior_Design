@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="General">
+        <EditTextPreference
+            android:defaultValue="@string/Nom"
+            android:key="@string/key_name"
+            android:summary="@string/Nom"
+            android:title="@string/Name" />
+        <ListPreference
+            android:defaultValue ="@string/mac_address"
+            android:key="1235"
+            android:summary="%s"
+            android:title="@string/mac"
+           />
+
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_header_about">
+
+        <Preference
+            android:key="@string/key_about"
+            android:summary="@string/summary_about" />
+
+        <Preference
+            android:key="@string/key_version"
+            android:summary="@string/app_version"
+            android:title="@string/title_version" />
+        <SwitchPreference
+            android:key="@string/key_fake"
+            android:title="Demostration Mode"
+            android:summary="@string/Demonstration"
+            />
+        <Preference
+            android:key="@string/key_send_feedback"
+            android:summary="@string/summary_support"
+            android:title="@string/title_send_feedback" />
+
+    </PreferenceCategory>
+</PreferenceScreen>
