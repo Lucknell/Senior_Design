@@ -1,15 +1,11 @@
 package seniordesign.lucknell.com.seniordesign;
 
-import android.Manifest;
-import android.content.Context;
-import android.content.pm.PackageManager;
-import android.content.res.Configuration;
+
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Handler;
-import android.os.PowerManager;
+import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
@@ -18,19 +14,17 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
-import seniordesign.lucknell.com.seniordesign.R;
-
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.os.Build;
-import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.Window;
@@ -41,7 +35,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.jjoe64.graphview.GraphView;
-import com.jjoe64.graphview.LegendRenderer;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
@@ -49,25 +42,27 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "bluetoothmodule2"; // for logging purposes
 
-    Button btnOn, btnOff, bluetooth_connect_btn;
-    Switch charging;
-
+    private Button DataButton, GraphButton, bluetooth_connect_btn, settings;
+    private Switch charging;
     private BluetoothAdapter btAdapter = null;
     private BluetoothSocket btSocket = null;
     private BluetoothDevice device;
     private OutputStream mmOutputStream;
     private InputStream mmInputStream;
-    private TextView myLabel;
+    private TextView myLabel, myLabel2, txtCharge;
     private Thread workerThread, thread;
     private volatile boolean stopWorker;
-    private boolean success = false, connected;
+    private boolean success = false, connected, listening = false, graphing = false, fake;
     private byte[] readBuffer;
-    private int readBufferPosition,counter = 0, graphSize = 0;
-    private double x, y, y2, y3;
+    private int readBufferPosition, counter = 0, even = 0;
+    private double x, y, y2, y3, volt;
+    private String name;
     private Runnable rgraph;
-    private Handler hgraph = new Handler(), blueHandler;
+    private Handler hgraph = new Handler();
     private ArrayList<String> graphdata = new ArrayList<String>();
-    private GraphView graph;
+    double fvolt = 7.1, fcurrent = 1204, fmilliwatt = 456;
+    private GraphView graph, graph2, graph3;
+    private Random rand = new Random();
     private LineGraphSeries<DataPoint> series = new LineGraphSeries<DataPoint>();
     private LineGraphSeries<DataPoint> series2 = new LineGraphSeries<DataPoint>();
     private LineGraphSeries<DataPoint> series3 = new LineGraphSeries<DataPoint>();
@@ -77,6 +72,15 @@ public class MainActivity extends AppCompatActivity {
     // MAC-address of Bluetooth module
     private static String address = "00:18:EF:00:1F:00";
 
+    public void stop() {
+        hgraph.removeCallbacks(rgraph);
+    }
+
+    public void restart() {
+        hgraph.removeCallbacks(rgraph);
+        hgraph.postDelayed(rgraph, 300);
+    }
+
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -84,55 +88,116 @@ public class MainActivity extends AppCompatActivity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getSupportActionBar().hide();
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+        name = sharedPref.getString("key_name", "Alex Summers");
+        address = sharedPref.getString("1235", "00:18:EF:00:1F:00");
+        fake = sharedPref.getBoolean("key_fake", false);
+        validateMac(address);
         setContentView(R.layout.activity_main);
-        btnOn = findViewById(R.id.btnOn);
-        btnOff = findViewById(R.id.btnOff);
-        bluetooth_connect_btn = findViewById(R.id.connect_btn);
+        DataButton = findViewById(R.id.dataBtn);
+        GraphButton = findViewById(R.id.graphBtn);
+        bluetooth_connect_btn = findViewById(R.id.connectBtn);
+        settings = findViewById(R.id.settingsBtn);
         myLabel = findViewById(R.id.txtArduino);
+        myLabel2 = findViewById(R.id.txtArduino2);
+        txtCharge = findViewById(R.id.txtcharging);
         charging = findViewById(R.id.switch1);
         graph = (GraphView) findViewById(R.id.graph);
+        graph2 = (GraphView) findViewById(R.id.graph2);
+        graph3 = (GraphView) findViewById(R.id.graph3);
+        charging.setVisibility(View.INVISIBLE);
+        DataButton.setVisibility(View.INVISIBLE);
+        GraphButton.setVisibility(View.INVISIBLE);
+
         makeGraph();
         counter++;
 
         btAdapter = BluetoothAdapter.getDefaultAdapter();
+        Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
+        Toast.makeText(getBaseContext(), "Welcome Back " + name, Toast.LENGTH_LONG).show();
+        ArrayList<String> s = new ArrayList<String>();
+        for (BluetoothDevice bt : pairedDevices)
+            s.add(bt.getName());
+
+
         checkBTState();
         chargingState();
-        btnOn.setOnClickListener(new OnClickListener() {
+        DataButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                //sendData("1");
+                if (!listening) {
+                    //sendData("1");
+                    if (success) {
+                        beginListenForData();
+                        listening = true;
+                        DataButton.setText("Reset Graphs");
+                        Toast.makeText(getBaseContext(), "Checking for data...", Toast.LENGTH_SHORT).show();
+                    } else
+                        Toast.makeText(getBaseContext(), "Please connect first.", Toast.LENGTH_SHORT).show();
+                } else {
+                    DataButton.setText("Check for Data");
+                    Toast.makeText(getBaseContext(), "Resetting Graphs", Toast.LENGTH_SHORT).show();
+                    resetGraph();
+                }
+            }
+        });
+
+        GraphButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
                 if (success) {
-                    beginListenForData();
-                    Toast.makeText(getBaseContext(), "Checking for data...", Toast.LENGTH_SHORT).show();
+                    if (!graphing) {
+                        // GraphButton.setText("Stop Graphs");
+                        graphing = true;
+                        rgraph = new Runnable() {
+                            @Override
+                            public void run() {
+                                generateData();
+                                hgraph.postDelayed(this, 300);
+                            }
+                        };
+                        hgraph.postDelayed(rgraph, 300);
+                        GraphButton.setEnabled(false);
+                        //GraphButton.setVisibility(View.INVISIBLE);
+                        Toast.makeText(getBaseContext(), "Graph generated.", Toast.LENGTH_SHORT).show();
+                    }
                 } else
                     Toast.makeText(getBaseContext(), "Please connect first.", Toast.LENGTH_SHORT).show();
             }
         });
 
-        btnOff.setOnClickListener(new OnClickListener() {
+
+        settings.setOnClickListener(new OnClickListener() {
+            @Override
             public void onClick(View v) {
-                rgraph = new Runnable() {
-                    @Override
-                    public void run() {
-                        generateData();
-                        hgraph.postDelayed(this, 300);
-                    }
-                };
-                hgraph.postDelayed(rgraph, 300);
-                Toast.makeText(getBaseContext(), "Graph generated. Hopefully...", Toast.LENGTH_SHORT).show();
+                //Toast.makeText(getBaseContext(), "Mac is " + address , Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(MainActivity.this, SettingsPrefActivity.class));
             }
         });
 
-        bluetooth_connect_btn.setOnClickListener(new View.OnClickListener() {
+        bluetooth_connect_btn.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (BTinit()) {
+                    //bluetooth_connect_btn.setEnabled(false);
                     bluetooth_connect_btn.setText("Connecting...");
                     bluetooth_connect_btn.setEnabled(false);
-                    BTconnect();
-                    bluetooth_connect_btn.setEnabled(true);
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            BTconnect();
+                        }
+                    }, 100);
+
+                    //bluetooth_connect_btn.setEnabled(true);
                 }
+
             }
         });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
     }
 
     @Override
@@ -200,6 +265,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private  void resetGraph()
+    {
+        listening = false;
+        stopWorker = true;
+        x = 0;
+        y = 0;
+        y3 = 0;
+        y2 = 0;
+        series = new LineGraphSeries<DataPoint>();
+        series2 = new LineGraphSeries<DataPoint>();
+        series3 = new LineGraphSeries<DataPoint>();
+        graph.removeAllSeries();
+        graph2.removeAllSeries();
+        graph3.removeAllSeries();
+        graphdata.clear();
+        makeGraph();
+    }
+
     private void chargingState() {
 
         final boolean stopThread = false;
@@ -233,6 +316,7 @@ public class MainActivity extends AppCompatActivity {
         stopWorker = false;
         readBufferPosition = 0;
         readBuffer = new byte[1024];
+        //Toast.makeText(getBaseContext(), fake+ "", Toast.LENGTH_SHORT).show();
         workerThread = new Thread(new Runnable() {
             public void run() {
                 while (!Thread.currentThread().isInterrupted() && !stopWorker) {
@@ -252,16 +336,56 @@ public class MainActivity extends AppCompatActivity {
                                     byte[] encodedBytes = new byte[readBufferPosition];
                                     System.arraycopy(readBuffer, 0, encodedBytes, 0, encodedBytes.length);
                                     final String data = new String(encodedBytes, "US-ASCII");
-                                    final String[] dataset = data.split(",");
-                                    graphdata.add(data);
+                                    final String[] dataset;
+                                    if (fake) {
+                                        even = rand.nextInt(7);
+                                        if (even % 2 == 0)
+                                            fvolt += 0.000009;
+                                        else
+                                            fvolt -= 0.000009;
+                                        if (even % 4 == 0)
+                                            fcurrent += 0.00037;
+                                        else
+                                            fcurrent -= 0.00037;
+                                        if (even % 6 == 0)
+                                            fmilliwatt += 0.0000043;
+                                        else
+                                            fmilliwatt -= 0.0000043;
+                                    }
+                                    if (!fake) {
+                                        dataset = data.split(",");
+                                        graphdata.add(data);
+                                    } else {
+                                        String temp = "1," + fvolt + "," + fcurrent + "," + fmilliwatt;
+                                        dataset = temp.split(",");
+                                        graphdata.add(temp);
+                                    }
+
                                     readBufferPosition = 0;
 
+                                    volt = Double.parseDouble(dataset[1]);
+                                    final double per = map(volt, 6.02, 7.4, 0, 100);
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+
+                                            chargingStatus(dataset[2], dataset[3]);
+                                        }
+                                    });
                                     handler.post(new Runnable() {
                                         public void run() {
-                                            String display = "Connection Status:\t " + dataset[0] +
-                                                    "\nVoltage:\t\t\t\t " + dataset[1] +
-                                                    "\nCurrent:\t\t\t\t " + dataset[2] +
-                                                    "\nmW:\t\t\t\t\t " + dataset[3];
+                                            String status;
+                                            if (dataset[0].equals("0"))
+                                                status = "Disconnected";
+                                            else
+                                                status = "Connected";
+                                            String display = "Status: \nVoltage:\nCurrent:\nmilliWatt:\nPercentage :";
+                                            String display2 = status +
+                                                    "\n" + String.format("%.2f", Math.abs(Double.parseDouble(dataset[1]))) + "V\n" +
+                                                    String.format("%.2f", Math.abs(Double.parseDouble(dataset[2]))) + "mA\n" +
+                                                    String.format("%.2f", Math.abs(Double.parseDouble(dataset[3]))) + "mWh\n" +
+                                                    String.format("%.2f", per) + "%";
+                                            myLabel2.setText(display2);
                                             myLabel.setText(display);
                                         }
                                     });
@@ -325,34 +449,87 @@ public class MainActivity extends AppCompatActivity {
     private void generateData() {
         graph.getLegendRenderer().setVisible(true);
         graph.getLegendRenderer().setFixedPosition(1, 1);
-        graphSize += graphdata.size();
-        for (int i = 0; i < graphdata.size(); i++) {
-            x = x + 0.5;
-            y = Double.parseDouble((graphdata.get(i).split(","))[3]);
-            series.appendData(new DataPoint(x, y), true, graphSize);
-            y2 = Double.parseDouble((graphdata.get(i).split(","))[2]);
-            series2.appendData(new DataPoint(x, y2), true, graphSize);
-            y3 = Double.parseDouble((graphdata.get(i).split(","))[1]);
-            series3.appendData(new DataPoint(x, y3), true, graphSize);
+        graph2.getLegendRenderer().setVisible(true);
+        graph2.getLegendRenderer().setFixedPosition(1, 1);
+        graph3.getLegendRenderer().setVisible(true);
+        graph3.getLegendRenderer().setFixedPosition(1, 1);
+        if (!fake) {
+            for (int i = 0; i < graphdata.size(); i++) {
+                x = x + 0.5;
+                y = Double.parseDouble((graphdata.get(i).split(","))[3]);
+                series.appendData(new DataPoint(x, y), true, 10);
+                y2 = Double.parseDouble((graphdata.get(i).split(","))[2]);
+                series2.appendData(new DataPoint(x, y2), true, 10);
+                y3 = Double.parseDouble((graphdata.get(i).split(","))[1]);
+                series3.appendData(new DataPoint(x, y3), true, 10);
+
+            }
+        } else {
+            for (int i = 0; i < graphdata.size(); i++) {
+                x = x + 0.5;
+                y = Double.parseDouble((graphdata.get(i).split(","))[3]);
+                series.appendData(new DataPoint(x, y), true, 10);
+                y2 = Double.parseDouble((graphdata.get(i).split(","))[2]);
+                series2.appendData(new DataPoint(x, y2), true, 10);
+                y3 = Double.parseDouble((graphdata.get(i).split(","))[1]);
+                series3.appendData(new DataPoint(x, y3), true, 10);
+
+            }
 
         }
         graphdata.clear();
         graph.removeAllSeries();
+        graph2.removeAllSeries();
+        graph3.removeAllSeries();
         graph.addSeries(series);
-        graph.addSeries(series2);
-        graph.addSeries(series3);
-        graph.getViewport().setMinX(1);
-        graph.getViewport().setMaxX(x+1.5);
+        graph2.addSeries(series2);
+        graph3.addSeries(series3);
+        if (x - 5.5 < 0) {
+            graph.getViewport().setMinX(0);
+            graph2.getViewport().setMinX(0);
+            graph3.getViewport().setMinX(0);
+
+        } else {
+            graph.getViewport().setMinX(x - 5.5);
+            graph2.getViewport().setMinX(x - 5.5);
+            graph3.getViewport().setMinX(x - 5.5);
+        }
+        graph.getViewport().setMaxX(x + 1.5);
         graph.getViewport().setXAxisBoundsManual(true);
         graph = (GraphView) findViewById(R.id.graph);
+        graph2.getViewport().setMaxX(x + 1.5);
+        graph2.getViewport().setXAxisBoundsManual(true);
+        graph2 = (GraphView) findViewById(R.id.graph2);
+        graph3.getViewport().setMaxX(x + 1.5);
+        graph3.getViewport().setXAxisBoundsManual(true);
+        graph3 = (GraphView) findViewById(R.id.graph3);
 
+        if(x > 650) {
+            resetGraph();
+            beginListenForData();
+        }
+    }
+
+    private boolean validateMac(String mac) {
+        String[] addr = mac.split(":");
+        if (addr.length != 6) {
+            Toast.makeText(getBaseContext(), "Mac address from the settings" +
+                    " was entered wrong. Using Default", Toast.LENGTH_LONG).show();
+            address = "00:18:EF:00:1F:00";
+        }
+        for (String s : addr)
+            if (s.length() != 2) {
+                Toast.makeText(getBaseContext(), "Mac address from the settings" +
+                        " was entered wrong. Using Default", Toast.LENGTH_LONG).show();
+                address = "00:18:EF:00:1F:00";
+            }
+        return true;
     }
 
     private void makeGraph() {
-        //LineGraphSeries<DataPoint> series, series2;
-
         graph = (GraphView) findViewById(R.id.graph);
-
+        graph2 = (GraphView) findViewById(R.id.graph2);
+        graph3 = (GraphView) findViewById(R.id.graph3);
 
         series.setColor(Color.RED);
         series3.setColor(Color.GREEN);
@@ -362,7 +539,9 @@ public class MainActivity extends AppCompatActivity {
         series.setTitle("Milliwatt");
         series2.setTitle("Current");
         series3.setTitle("Voltage");
-        graph.setTitle("Real-time Data");
+        graph.setTitle("MilliWatts");
+        graph2.setTitle("Current");
+        graph3.setTitle("Voltage");
 
         if (counter < 1) {
             x = 0.0;
@@ -377,12 +556,21 @@ public class MainActivity extends AppCompatActivity {
             mmInputStream = btSocket.getInputStream();
             mmOutputStream = btSocket.getOutputStream();
             success = true;
+            charging.setVisibility(View.VISIBLE);
+            DataButton.setVisibility(View.VISIBLE);
+            GraphButton.setVisibility(View.VISIBLE);
+            bluetooth_connect_btn.setEnabled(true);
             bluetooth_connect_btn.setText("Disconnect");
             Toast.makeText(getApplicationContext(),
                     "Connection to bluetooth device successful", Toast.LENGTH_LONG).show();
         } catch (IOException e) {
             e.printStackTrace();
             connected = false;
+
+            DataButton.setVisibility(View.INVISIBLE);
+            GraphButton.setVisibility(View.INVISIBLE);
+            charging.setVisibility(View.INVISIBLE);
+            bluetooth_connect_btn.setEnabled(true);
             bluetooth_connect_btn.setText("Connect");
         }
 
@@ -440,9 +628,24 @@ public class MainActivity extends AppCompatActivity {
                 mmOutputStream.write(msgBuffer);
             } catch (IOException e) {
                 String msg = "In onResume() and an exception occurred during write: " + e.getMessage();
-               // errorExit("Fatal Error", msg);
+                // errorExit("Fatal Error", msg);
             }
         }
+    }
+
+    public void chargingStatus(String current, String mW) {
+
+        if (Math.abs(Double.parseDouble(current)) > 35 && Math.abs(Double.parseDouble(mW)) > 270 ) {
+             txtCharge.setText("Charging");
+        } else {
+            txtCharge.setText("Discharging");
+
+        }
+
+    }
+
+    public double map(double x, double in_min, double in_max, double out_min, double out_max) {
+        return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     }
 
 }
